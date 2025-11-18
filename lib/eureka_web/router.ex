@@ -8,6 +8,7 @@ defmodule EurekaWeb.Router do
     plug :put_root_layout, html: {EurekaWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug EurekaWeb.Plugs.AuthPlug
   end
 
   pipeline :api do
@@ -18,6 +19,13 @@ defmodule EurekaWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    post "/navigate", PageController, :navigate
+    live "/:username/:repository", RepositoryLive
+
+    # OAuth routes
+    get "/auth/github", AuthController, :new
+    get "/auth/github/callback", AuthController, :callback
+    post "/logout", AuthController, :delete
   end
 
   # Other scopes may use custom stacks.

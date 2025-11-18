@@ -20,6 +20,24 @@ if System.get_env("PHX_SERVER") do
   config :eureka, EurekaWeb.Endpoint, server: true
 end
 
+config :eureka, :github_oauth,
+  client_id: System.get_env("GITHUB_CLIENT_ID"),
+  client_secret: System.get_env("GITHUB_CLIENT_SECRET"),
+  callback_url:
+    System.get_env("GITHUB_CALLBACK_URL", "http://localhost:4000/auth/github/callback")
+
+config :eureka, :jwt,
+  session_secret: System.get_env("SESSION_SECRET"),
+  # 20 hours
+  token_expiry: 20 * 60 * 60
+
+config :eureka, :allowed_users,
+  users:
+    System.get_env("ALLOWED_USERS", "")
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
