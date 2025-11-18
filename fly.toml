@@ -1,0 +1,32 @@
+# fly.toml app configuration file generated for eureka-dev on 2025-11-17T22:11:39-05:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'eureka-dev'
+primary_region = 'iad'
+kill_signal = 'SIGTERM'
+
+[build]
+
+[env]
+  PHX_HOST = 'eureka-dev.fly.dev'
+  PORT = '8080'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 1000
+    soft_limit = 1000
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
