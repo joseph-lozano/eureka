@@ -4,6 +4,7 @@ defmodule EurekaWeb.Endpoint do
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
+  # Note: domain is configured at runtime via session_options config
   @session_options [
     store: :cookie,
     key: "_eureka_key",
@@ -52,6 +53,15 @@ defmodule EurekaWeb.Endpoint do
 
   plug Plug.MethodOverride
   plug Plug.Head
-  plug Plug.Session, @session_options
+
+  plug Plug.Session,
+       Keyword.merge(
+         @session_options,
+         Application.get_env(:eureka, EurekaWeb.Endpoint)[:session_options] || []
+       )
+
+  # Route workspace subdomains to reverse proxy before hitting the main router
+  plug EurekaWeb.Plugs.SubdomainRouter
+
   plug EurekaWeb.Router
 end

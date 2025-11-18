@@ -18,4 +18,4 @@ git clone "https://github.com/${USERNAME}/${REPO_NAME}.git" /repo
 cd /repo
 
 # Run opencode serve
-exec /root/.opencode/bin/opencode serve --hostname :: --port 8080
+exec /root/.opencode/bin/opencode web --hostname :: --port 8080

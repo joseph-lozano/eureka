@@ -12,7 +12,7 @@ config :eureka,
 
 # Configures the endpoint
 config :eureka, EurekaWeb.Endpoint,
-  url: [host: "localhost"],
+  url: [host: "eureka.local"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: EurekaWeb.ErrorHTML, json: EurekaWeb.ErrorJSON],

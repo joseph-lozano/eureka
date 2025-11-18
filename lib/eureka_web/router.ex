@@ -25,11 +25,11 @@ defmodule EurekaWeb.Router do
     get "/auth/github", AuthController, :new
     get "/auth/github/callback", AuthController, :callback
     post "/logout", AuthController, :delete
-
-    live_session :default, on_mount: EurekaWeb.UserLiveAuth do
-      live "/:username/:repository", RepositoryLive
-    end
   end
+
+  # Note: Workspace subdomain proxying is handled by SubdomainRouter plug in endpoint.ex
+  # It intercepts workspace subdomain requests (e.g., sst--opencode.eureka.dev) BEFORE
+  # they reach the router, so no proxy routes are needed here.
 
   # Other scopes may use custom stacks.
   # scope "/api", EurekaWeb do

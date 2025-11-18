@@ -24,7 +24,7 @@ config :eureka, :github_oauth,
   client_id: System.get_env("GITHUB_CLIENT_ID"),
   client_secret: System.get_env("GITHUB_CLIENT_SECRET"),
   callback_url:
-    System.get_env("GITHUB_CALLBACK_URL", "http://localhost:4000/auth/github/callback")
+    System.get_env("GITHUB_CALLBACK_URL", "http://eureka.local:4000/auth/github/callback")
 
 config :eureka, :jwt,
   session_secret: System.get_env("SESSION_SECRET"),
@@ -73,7 +73,15 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    # Force SSL for secure cookies
+    force_ssl: [hsts: true],
+    # Configure session cookie for cross-subdomain authentication
+    # The leading dot in domain allows cookie sharing across all subdomains
+    session_options: [
+      domain: ".#{host}",
+      secure: true
+    ]
 
   # ## SSL Support
   #
