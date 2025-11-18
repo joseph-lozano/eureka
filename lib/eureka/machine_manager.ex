@@ -187,7 +187,7 @@ defmodule Eureka.MachineManager do
 
   defp get_machine_file_path(state) do
     data_dir = Application.get_env(:eureka, :data_dir, ".")
-    Path.join([data_dir, state.user_id, state.username, "#{state.repo_name}.json"])
+    Path.join([data_dir, to_string(state.user_id), state.username, "#{state.repo_name}.json"])
   end
 
   defp load_machine_data(state) do

@@ -26,7 +26,9 @@ defmodule EurekaWeb.Router do
     get "/auth/github/callback", AuthController, :callback
     post "/logout", AuthController, :delete
 
-    live "/:username/:repository", RepositoryLive
+    live_session :default, on_mount: EurekaWeb.UserLiveAuth do
+      live "/:username/:repository", RepositoryLive
+    end
   end
 
   # Other scopes may use custom stacks.

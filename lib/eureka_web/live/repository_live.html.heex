@@ -1,7 +1,15 @@
 <Layouts.app flash={@flash}>
   <div class="min-h-screen flex items-center justify-center">
     <div class="text-center">
-      <span class="loading loading-spinner loading-xl"></span>
+      <%= if @machine_id do %>
+        <div class="space-y-4">
+          <h1 class="text-2xl font-bold">Repository: {@username}/{@repository}</h1>
+          <p class="text-gray-600">Machine ID: {@machine_id}</p>
+          <p class="text-green-600">Machine is ready!</p>
+        </div>
+      <% else %>
+        <span class="loading loading-spinner loading-xl"></span>
+      <% end %>
     </div>
   </div>
 </Layouts.app>

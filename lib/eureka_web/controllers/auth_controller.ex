@@ -146,7 +146,7 @@ defmodule EurekaWeb.AuthController do
         {:ok, token, _user} ->
           conn
           |> UserSession.set_session_cookie(token)
-          |> clear_session()
+          |> put_session(:user_token, token)
           |> put_flash(:info, "Successfully logged in!")
           |> redirect(to: "/")
 
