@@ -50,41 +50,12 @@ defmodule Eureka.Changes.CreateFlyMachineAndWriteFile do
   end
 
   defp create_fly_machine(repository) do
-    # Use the repository name as the Fly app name for now
-    # This could be configurable in the future
-    app_name = repository.name
-
     # Create a simple machine configuration
     machine_config = %{
-      "config" => %{
-        "auto_destroy" => true,
-        "image" => "flyio/hellofly:latest",
-        "guest" => %{
-          "cpu_kind" => "shared",
-          "cpus" => 1,
-          "memory_mb" => 256
-        },
-        "restart" => %{
-          "policy" => "no"
-        },
-        "services" => [
-          %{
-            "protocol" => "tcp",
-            "internal_port" => 8080,
-            "ports" => [
-              %{
-                "port" => 80,
-                "handlers" => ["http"]
-              }
-            ]
-          }
-        ]
-      },
-      "name" => "#{repository.user_id}-#{repository.username}-#{repository.name}",
-      "region" => "iad"
+      "name" => "#{repository.user_id}-#{repository.username}-#{repository.name}"
     }
 
-    case Eureka.Fly.create_machine(app_name, machine_config) do
+    case Eureka.Fly.create_machine(machine_config) do
       {:ok, machine_data} ->
         {:ok, machine_data}
 

@@ -20,12 +20,13 @@ defmodule EurekaWeb.Router do
 
     get "/", PageController, :home
     post "/navigate", PageController, :navigate
-    live "/:username/:repository", RepositoryLive
 
     # OAuth routes
     get "/auth/github", AuthController, :new
     get "/auth/github/callback", AuthController, :callback
     post "/logout", AuthController, :delete
+
+    live "/:username/:repository", RepositoryLive
   end
 
   # Other scopes may use custom stacks.

@@ -41,8 +41,9 @@ config :eureka, :allowed_users,
 config :eureka, :data_dir, System.get_env("DATA_DIR", ".")
 
 config :eureka, :fly_api,
-  api_key: System.get_env("FLY_API_KEY"),
-  api_url: "https://api.machines.dev/v1"
+  api_key: System.get_env("FLY_TOKEN"),
+  api_url: "https://api.machines.dev/v1",
+  app_name: System.get_env("FLY_APP_NAME", "eureka-dev")
 
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.

@@ -7,8 +7,6 @@ app = 'eureka-dev'
 primary_region = 'iad'
 kill_signal = 'SIGTERM'
 
-[build]
-
 [env]
   PHX_HOST = 'eureka-dev.fly.dev'
   PORT = '8080'
@@ -18,7 +16,7 @@ kill_signal = 'SIGTERM'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ['app']
 
   [http_service.concurrency]
