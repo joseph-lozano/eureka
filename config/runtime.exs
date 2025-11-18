@@ -38,7 +38,7 @@ config :eureka, :allowed_users,
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
 
-config :eureka, :data_dir, System.get_env("DATA_DIR", ".")
+config :eureka, :data_dir, System.get_env("DATA_DIR", "./data")
 
 config :eureka, :fly_api,
   api_key: System.get_env("FLY_TOKEN"),
