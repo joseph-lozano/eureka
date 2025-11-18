@@ -38,6 +38,12 @@ config :eureka, :allowed_users,
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
 
+config :eureka, :data_dir, System.get_env("DATA_DIR", ".")
+
+config :eureka, :fly_api,
+  api_key: System.get_env("FLY_API_KEY"),
+  api_url: "https://api.machines.dev/v1"
+
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

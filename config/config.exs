@@ -44,7 +44,8 @@ config :spark,
   ]
 
 config :eureka,
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  ash_domains: [Eureka.Core]
 
 # Configures the endpoint
 config :eureka, EurekaWeb.Endpoint,
