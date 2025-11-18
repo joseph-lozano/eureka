@@ -10,10 +10,9 @@ defmodule Eureka.MachineManager do
           user_id: String.t(),
           username: String.t(),
           repo_name: String.t(),
-          machine_id: String.t() | nil
+          machine_id: String.t() | nil,
+          suspend_timer: reference() | nil
         }
-
-  # Client API
 
   @doc """
   Starts the MachineManager GenServer.
@@ -43,7 +42,7 @@ defmodule Eureka.MachineManager do
   - {:error, :no_machine} if no machine is available
   """
   def get_machine_id(pid) do
-    GenServer.call(pid, :get_machine_id)
+    GenServer.call(pid, :get_machine_id, 20_000)
   end
 
   @doc """
@@ -54,18 +53,18 @@ defmodule Eureka.MachineManager do
   - {:error, reason} on failure
   """
   def ensure_machine(pid) do
-    GenServer.call(pid, :ensure_machine)
+    GenServer.call(pid, :ensure_machine, 20_000)
   end
 
   @doc """
-  Stops the machine.
+  Suspends the machine.
 
   ## Returns
   - {:ok, machine_data} on success
   - {:error, reason} on failure
   """
-  def stop_machine(pid) do
-    GenServer.call(pid, :stop_machine)
+  def suspend_machine(pid) do
+    GenServer.call(pid, :suspend_machine, 20_000)
   end
 
   @doc """
@@ -76,7 +75,7 @@ defmodule Eureka.MachineManager do
   - {:error, reason} on failure
   """
   def list_sessions(pid) do
-    GenServer.call(pid, {:machine_request, :list_sessions, []})
+    GenServer.call(pid, {:machine_request, :list_sessions, []}, 20_000)
   end
 
   # GenServer callbacks
@@ -87,7 +86,8 @@ defmodule Eureka.MachineManager do
       user_id: user_id,
       username: username,
       repo_name: repo_name,
-      machine_id: nil
+      machine_id: nil,
+      suspend_timer: nil
     }
 
     {:ok, state, {:continue, :load_or_create_machine}}
@@ -108,6 +108,109 @@ defmodule Eureka.MachineManager do
         )
 
         {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_call(:get_machine_id, _from, %{machine_id: nil} = state) do
+    {:reply, {:error, :no_machine}, state}
+  end
+
+  def handle_call(:get_machine_id, _from, state) do
+    {:reply, {:ok, state.machine_id}, state}
+  end
+
+  @impl true
+  def handle_call(:ensure_machine, _from, %{machine_id: nil} = state) do
+    case create_new_machine(state) do
+      {:ok, machine_id} ->
+        new_state = %{state | machine_id: machine_id}
+        {:reply, {:ok, machine_id}, new_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:ensure_machine, _from, state) do
+    {:reply, {:ok, state.machine_id}, state}
+  end
+
+  @impl true
+  def handle_call(:suspend_machine, _from, %{machine_id: nil} = state) do
+    {:reply, {:error, :no_machine}, state}
+  end
+
+  def handle_call(:suspend_machine, _from, state) do
+    {result, new_state} = suspend_machine_internal(state, "manual")
+    {:reply, result, new_state}
+  end
+
+  @impl true
+  def handle_call({:machine_request, action, args}, _from, %{machine_id: nil} = state) do
+    case ensure_machine_sync(state) do
+      {:ok, machine_id} ->
+        new_state = %{state | machine_id: machine_id}
+        result = machine_request_with_retry(machine_id, action, args)
+        final_state = reset_suspend_timer(new_state)
+        {:reply, result, final_state}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call({:machine_request, action, args}, _from, state) do
+    result = machine_request_with_retry(state.machine_id, action, args)
+    new_state = reset_suspend_timer(state)
+    {:reply, result, new_state}
+  end
+
+  @impl true
+  def handle_info(:suspend_machine, state) do
+    case state.machine_id do
+      nil ->
+        {:noreply, state}
+
+      _machine_id ->
+        {_result, new_state} = suspend_machine_internal(state, "auto")
+        {:noreply, new_state}
+    end
+  end
+
+  def handle_info(msg, state) do
+    Logger.debug("Received unexpected message: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
+  # Private functions
+
+  defp get_machine_file_path(state) do
+    data_dir = Application.get_env(:eureka, :data_dir, ".")
+    Path.join([data_dir, state.user_id, state.username, "#{state.repo_name}.json"])
+  end
+
+  defp load_machine_data(state) do
+    file_path = get_machine_file_path(state)
+
+    with {:ok, content} <- File.read(file_path),
+         {:ok, %{"machine_id" => machine_id}} when is_binary(machine_id) <- Jason.decode(content) do
+      {:ok, machine_id}
+    else
+      {:error, :enoent} ->
+        {:error, :not_found}
+
+      {:ok, data} ->
+        Logger.warning("Invalid machine data format in #{file_path}: #{inspect(data)}")
+        {:error, :invalid_format}
+
+      {:error, reason} ->
+        Logger.error("Failed to decode machine data from #{file_path}: #{inspect(reason)}")
+        {:error, :decode_error}
+
+      reason ->
+        Logger.error("Failed to read machine data from #{file_path}: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
@@ -147,94 +250,13 @@ defmodule Eureka.MachineManager do
     end
   end
 
-  @impl true
-  def handle_call(:get_machine_id, _from, %{machine_id: nil} = state) do
-    {:reply, {:error, :no_machine}, state}
-  end
-
-  def handle_call(:get_machine_id, _from, state) do
-    {:reply, {:ok, state.machine_id}, state}
-  end
-
-  @impl true
-  def handle_call(:ensure_machine, _from, %{machine_id: nil} = state) do
-    case create_new_machine(state) do
-      {:ok, machine_id} ->
-        new_state = %{state | machine_id: machine_id}
-        {:reply, {:ok, machine_id}, new_state}
-
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call(:ensure_machine, _from, state) do
-    {:reply, {:ok, state.machine_id}, state}
-  end
-
-  @impl true
-  def handle_call(:stop_machine, _from, %{machine_id: nil} = state) do
-    {:reply, {:error, :no_machine}, state}
-  end
-
-  def handle_call(:stop_machine, _from, state) do
-    case Eureka.Fly.suspend_machine(state.machine_id) do
-      {:ok, _machine_data} ->
-        Logger.info(
-          "Stopped machine #{state.machine_id} for #{state.username}/#{state.repo_name}"
-        )
-
-        {:reply, {:ok, state.machine_id}, state}
-
-      {:error, reason} ->
-        Logger.error("Failed to stop machine #{state.machine_id}: #{inspect(reason)}")
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  @impl true
-  def handle_call({:machine_request, _action, _args}, _from, %{machine_id: nil} = state) do
-    {:reply, {:error, :no_machine}, state}
-  end
-
-  def handle_call({:machine_request, action, args}, _from, state) do
-    result = machine_request_with_retry(state.machine_id, action, args)
-    {:reply, result, state}
-  end
-
-  # Private functions
-
-  defp get_machine_file_path(state) do
-    data_dir = Application.get_env(:eureka, :data_dir, ".")
-    Path.join([data_dir, state.user_id, state.username, "#{state.repo_name}.json"])
-  end
-
-  defp load_machine_data(state) do
-    file_path = get_machine_file_path(state)
-
-    with {:ok, content} <- File.read(file_path),
-         {:ok, %{"machine_id" => machine_id}} when is_binary(machine_id) <- Jason.decode(content) do
-      {:ok, machine_id}
-    else
-      {:error, :enoent} ->
-        {:error, :not_found}
-
-      {:ok, data} ->
-        Logger.warning("Invalid machine data format in #{file_path}: #{inspect(data)}")
-        {:error, :invalid_format}
-
-      {:error, reason} ->
-        Logger.error("Failed to decode machine data from #{file_path}: #{inspect(reason)}")
-        {:error, :decode_error}
-
-      reason ->
-        Logger.error("Failed to read machine data from #{file_path}: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
   defp create_new_machine(state) do
-    with {:ok, machine_data} <- Eureka.Fly.create_machine(),
+    machine_config = %{
+      "username" => state.username,
+      "repo_name" => state.repo_name
+    }
+
+    with {:ok, machine_data} <- Eureka.Fly.create_machine(machine_config),
          machine_id = machine_data["id"],
          :ok <- save_machine_data(state, machine_id) do
       {:ok, machine_id}
@@ -267,30 +289,124 @@ defmodule Eureka.MachineManager do
   end
 
   defp machine_request_with_retry(machine_id, action, args) do
-    # Try to start machine once if we get network error
-    case apply(Eureka.Fly, action, [machine_id | args]) do
+    case apply_with_timeout(Eureka.Fly, action, [machine_id | args], 5000) do
       {:ok, result} ->
         {:ok, result}
 
       {:error, {:network_error, %Req.TransportError{reason: :nxdomain}}} ->
-        case Eureka.Fly.start_machine(machine_id) do
-          {:ok, _} ->
-            Logger.info("Started machine #{machine_id}, retrying #{action}")
-            # Now retry with backoff
-            Eureka.Backoff.with_retry(
-              fn -> apply(Eureka.Fly, action, [machine_id | args]) end,
-              4,
-              1000,
-              2
-            )
+        handle_network_error_and_retry(machine_id, action, args)
 
-          {:error, start_reason} ->
-            Logger.warning("Failed to start machine #{machine_id}: #{inspect(start_reason)}")
-            {:error, {:network_error, %Req.TransportError{reason: :nxdomain}}}
-        end
+      {:error, :timeout} ->
+        handle_network_error_and_retry(machine_id, action, args)
 
       error ->
         error
+    end
+  end
+
+  defp apply_with_timeout(module, function, args, timeout) do
+    task = Task.async(fn -> apply(module, function, args) end)
+
+    try do
+      Task.await(task, timeout)
+    catch
+      :exit, {:timeout, _} ->
+        Task.shutdown(task, :brutal_kill)
+        {:error, :timeout}
+    end
+  end
+
+  defp handle_network_error_and_retry(machine_id, action, args) do
+    case Eureka.Fly.start_machine(machine_id) do
+      {:ok, _} ->
+        Logger.info("Started machine #{machine_id}, retrying #{action}")
+
+        should_retry = fn
+          {:network_error, %Req.TransportError{reason: :nxdomain}} -> true
+          :timeout -> true
+          _ -> false
+        end
+
+        request_fun = fn ->
+          apply_with_timeout(Eureka.Fly, action, [machine_id | args], 10000)
+        end
+
+        Eureka.Backoff.with_retry_conditional(request_fun, should_retry, 4, 1000, 2)
+
+      {:error, start_reason} ->
+        Logger.warning("Failed to start machine #{machine_id}: #{inspect(start_reason)}")
+        {:error, {:network_error, %Req.TransportError{reason: :nxdomain}}}
+    end
+  end
+
+  defp suspend_machine_internal(state, reason) do
+    case Eureka.Fly.suspend_machine(state.machine_id) do
+      {:ok, _machine_data} ->
+        log_message =
+          case reason do
+            "auto" ->
+              "Auto-suspending machine #{state.machine_id} due to inactivity"
+
+            "manual" ->
+              "Suspended machine #{state.machine_id} for #{state.username}/#{state.repo_name}"
+          end
+
+        Logger.info(log_message)
+        new_state = clear_suspend_timer(state)
+        {{:ok, state.machine_id}, new_state}
+
+      {:error, suspend_reason} ->
+        Logger.error("Failed to suspend machine #{state.machine_id}: #{inspect(suspend_reason)}")
+        new_state = clear_suspend_timer(state)
+        {{:error, suspend_reason}, new_state}
+    end
+  end
+
+  defp reset_suspend_timer(state) do
+    state
+    |> clear_suspend_timer()
+    |> start_suspend_timer()
+  end
+
+  defp clear_suspend_timer(%{suspend_timer: timer} = state) when is_reference(timer) do
+    Process.cancel_timer(timer)
+    %{state | suspend_timer: nil}
+  end
+
+  defp clear_suspend_timer(state) do
+    %{state | suspend_timer: nil}
+  end
+
+  defp start_suspend_timer(%{machine_id: nil} = state) do
+    state
+  end
+
+  defp start_suspend_timer(state) do
+    timer = Process.send_after(self(), :suspend_machine, 60_000)
+    %{state | suspend_timer: timer}
+  end
+
+  defp ensure_machine_sync(state) do
+    case load_machine_data(state) do
+      {:ok, machine_id} ->
+        case Eureka.Fly.start_machine(machine_id) do
+          {:ok, _} ->
+            {:ok, machine_id}
+
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to start machine #{machine_id}, creating new: #{inspect(reason)}"
+            )
+
+            create_new_machine(state)
+        end
+
+      {:error, :not_found} ->
+        create_new_machine(state)
+
+      {:error, reason} ->
+        Logger.error("Failed to load machine data: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 end

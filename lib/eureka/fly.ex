@@ -18,65 +18,73 @@ defmodule Eureka.Fly do
     api_key = api_config[:api_key]
     api_url = api_config[:api_url]
     app_name = api_config[:app_name]
+    username = machine_config["username"]
+    repo_name = machine_config["repo_name"]
 
     if is_nil(api_key) or is_nil(app_name) do
       {:error, :missing_config}
     else
-      url = "#{api_url}/apps/#{app_name}/machines"
+      if is_nil(username) or is_nil(repo_name) do
+        {:error, :missing_repo_info}
+      else
+        url = "#{api_url}/apps/#{app_name}/machines"
 
-      # Default machine configuration
-      default_config = %{
-        "config" => %{
-          "auto_destroy" => false,
-          "image" => "jetpackjoe/opencode:latest",
-          "guest" => %{
-            "cpu_kind" => "shared",
-            "cpus" => 1,
-            "memory_mb" => 512
-          },
-          "restart" => %{
-            "policy" => "no"
-          },
-          "services" => [
-            %{
-              "protocol" => "tcp",
-              "internal_port" => 8080,
-              "ports" => [
-                %{
-                  "port" => 80,
-                  "handlers" => ["http"]
-                }
-              ]
+        default_config = %{
+          "config" => %{
+            "auto_destroy" => false,
+            "image" => "jetpackjoe/opencode:latest",
+            "guest" => %{
+              "cpu_kind" => "shared",
+              "cpus" => 1,
+              "memory_mb" => 512
+            },
+            "restart" => %{
+              "policy" => "no"
+            },
+            "services" => [
+              %{
+                "protocol" => "tcp",
+                "internal_port" => 8080,
+                "ports" => [
+                  %{
+                    "port" => 80,
+                    "handlers" => ["http"]
+                  }
+                ]
+              }
+            ],
+            "env" => %{
+              "USERNAME" => username,
+              "REPO_NAME" => repo_name
             }
-          ]
-        },
-        "region" => "iad",
-        "skip_launch" => false
-      }
+          },
+          "region" => "iad",
+          "skip_launch" => false
+        }
 
-      # Merge with provided config
-      final_config = deep_merge(default_config, machine_config)
+        final_config = deep_merge(default_config, machine_config)
 
-      headers = [
-        {"Content-Type", "application/json"},
-        {"Authorization", "Bearer #{api_key}"}
-      ]
+        headers = [
+          {"Content-Type", "application/json"},
+          {"Authorization", "Bearer #{api_key}"}
+        ]
 
-      case Req.post(url, json: final_config, headers: headers) do
-        {:ok, %{status: 200} = response} ->
-          {:ok, response.body}
+        case Req.post(url, json: final_config, headers: headers) do
+          {:ok, %{status: 200} = response} ->
+            {:ok, response.body}
 
-        {:ok, %{status: status} = response} when status in 400..499 ->
-          {:error, {:client_error, response.body}}
+          {:ok, %{status: status} = response} when status in 400..499 ->
+            {:error, {:client_error, response.body}}
 
-        {:ok, %{status: status} = response} when status in 500..599 ->
-          {:error, {:server_error, response.body}}
+          {:ok, %{status: status} = response} when status in 500..599 ->
+            {:error, {:server_error, response.body}}
 
-        {:ok, response} ->
-          {:error, {:unexpected_response, response}}
+          {:ok, response} ->
+            {:error, {:unexpected_response, response}}
 
-        {:error, reason} ->
-          {:error, {:network_error, reason}}
+          {:error, reason} ->
+            {:error, {:network_error, reason}}
+        end
       end
     end
   end
@@ -240,6 +248,7 @@ defmodule Eureka.Fly do
 
   ## Parameters
   - machine_id: The ID of the machine to list sessions from
+  - opts: Options for the request (optional)
 
   ## Returns
   - {:ok, sessions} on success
@@ -249,8 +258,8 @@ defmodule Eureka.Fly do
       iex> Eureka.Fly.list_sessions("machine_123")
       {:ok, [%{"id" => "ses_abc123", "title" => "My Session"}]}
   """
-  def list_sessions(machine_id) do
-    make_request(:get, machine_id, "/session", nil)
+  def list_sessions(machine_id, opts \\ []) do
+    make_request(:get, machine_id, "/session", nil, opts)
   end
 
   @doc """
@@ -259,6 +268,7 @@ defmodule Eureka.Fly do
   ## Parameters
   - machine_id: The ID of the machine to create session on
   - session_data: Map containing session data (parentID, title, etc.)
+  - opts: Options for the request (optional)
 
   ## Returns
   - {:ok, session_id} on success
@@ -268,8 +278,8 @@ defmodule Eureka.Fly do
       iex> Eureka.Fly.create_session("machine_123", %{"title" => "New Session"})
       {:ok, "ses_def456"}
   """
-  def create_session(machine_id, session_data \\ %{}) do
-    case make_request(:post, machine_id, "/session", session_data) do
+  def create_session(machine_id, session_data \\ %{}, opts \\ []) do
+    case make_request(:post, machine_id, "/session", session_data, opts) do
       {:ok, session} ->
         {:ok, session["id"]}
 
@@ -285,6 +295,7 @@ defmodule Eureka.Fly do
   - machine_id: The ID of the machine
   - session_id: The ID of the session
   - message_data: Map containing message data (parts, model, etc.)
+  - opts: Options for the request (optional)
 
   ## Returns
   - {:ok, %{id: message_id, text: message_text}} on success
@@ -296,8 +307,8 @@ defmodule Eureka.Fly do
       ...> })
       {:ok, %{id: "msg_ghi789", text: "Hello"}}
   """
-  def create_message(machine_id, session_id, message_data) do
-    case make_request(:post, machine_id, "/session/#{session_id}/message", message_data) do
+  def create_message(machine_id, session_id, message_data, opts \\ []) do
+    case make_request(:post, machine_id, "/session/#{session_id}/message", message_data, opts) do
       {:ok, message} ->
         text_part =
           message["parts"]
@@ -322,6 +333,7 @@ defmodule Eureka.Fly do
   ## Parameters
   - machine_id: The ID of the machine
   - session_id: The ID of the session
+  - opts: Options for the request (optional)
 
   ## Returns
   - {:ok, messages} on success
@@ -331,8 +343,8 @@ defmodule Eureka.Fly do
       iex> Eureka.Fly.list_messages("machine_123", "ses_abc123")
       {:ok, [%{role: "user", text: "Hello"}, %{role: "assistant", text: "Hi there!"}]}
   """
-  def list_messages(machine_id, session_id) do
-    case make_request(:get, machine_id, "/session/#{session_id}/message", nil) do
+  def list_messages(machine_id, session_id, opts \\ []) do
+    case make_request(:get, machine_id, "/session/#{session_id}/message", nil, opts) do
       {:ok, messages} ->
         text_messages =
           messages
@@ -354,8 +366,7 @@ defmodule Eureka.Fly do
     end
   end
 
-  # Helper function for making HTTP requests with common error handling
-  defp make_request(method, machine_id, path, body) do
+  defp make_request(method, machine_id, path, body, opts \\ []) do
     api_config = Application.get_env(:eureka, :fly_api)
     api_key = api_config[:api_key]
     app_name = api_config[:app_name]
@@ -370,14 +381,17 @@ defmodule Eureka.Fly do
         {"Authorization", "Bearer #{api_key}"}
       ]
 
-      options = [
+      default_options = [
         headers: headers,
         connect_options: [transport_opts: [inet6: true]]
       ]
 
-      options = if body, do: Keyword.put(options, :json, body), else: options
+      default_options =
+        if body, do: Keyword.put(default_options, :json, body), else: default_options
 
-      request = Req.new(method: method, url: url) |> Req.merge(options)
+      final_options = Keyword.merge(default_options, opts)
+
+      request = Req.new(method: method, url: url) |> Req.merge(final_options)
 
       case Req.request(request) do
         {:ok, %{status: 200} = response} ->
@@ -398,7 +412,6 @@ defmodule Eureka.Fly do
     end
   end
 
-  # Helper function for deep merging maps
   defp deep_merge(left, right) when is_map(left) and is_map(right) do
     Map.merge(left, right, fn _key, left_val, right_val ->
       if is_map(left_val) and is_map(right_val) do
