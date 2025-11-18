@@ -41,12 +41,9 @@ defmodule Eureka.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:usage_rules, "~> 0.1", only: [:dev]},
       {:tidewave, "~> 0.5", only: [:dev]},
       {:live_debugger, "~> 0.4", only: [:dev]},
-      {:ash_phoenix, "~> 2.0"},
-      {:ash, "~> 3.0"},
       {:igniter, "~> 0.6", only: [:dev, :test]},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_html, "~> 4.1"},

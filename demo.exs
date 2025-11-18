@@ -29,8 +29,7 @@ message_data = %{
   "parts" => [
     %{
       "type" => "text",
-      "text" =>
-        "Hello! This is a demo message sent to the Fly.io machine session."
+      "text" => "Hello! This is a demo message sent to the Fly.io machine session."
     }
   ]
 }
@@ -39,3 +38,13 @@ message_data = %{
 
 # Step 6: List messages
 {:ok, text_messages} = Eureka.Fly.list_messages(machine_id, session_id)
+
+{total_time, _} =
+  :timer.tc(fn ->
+    {start_time, _} = :timer.tc(fn -> Eureka.Fly.start_machine(machine_id) end)
+    IO.puts("Machine started in #{div(start_time, 1_000)}ms")
+    {req_time, _} = :timer.tc(fn -> Eureka.Fly.list_sessions(machine_id) end)
+    IO.puts("Sessions listed in #{div(req_time, 1_000)}ms")
+  end)
+
+IO.puts("Total Time: #{div(total_time, 1_000)}ms")

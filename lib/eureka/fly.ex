@@ -27,7 +27,7 @@ defmodule Eureka.Fly do
       # Default machine configuration
       default_config = %{
         "config" => %{
-          "auto_destroy" => true,
+          "auto_destroy" => false,
           "image" => "jetpackjoe/opencode:latest",
           "guest" => %{
             "cpu_kind" => "shared",
@@ -63,6 +63,96 @@ defmodule Eureka.Fly do
       ]
 
       case Req.post(url, json: final_config, headers: headers) do
+        {:ok, %{status: 200} = response} ->
+          {:ok, response.body}
+
+        {:ok, %{status: status} = response} when status in 400..499 ->
+          {:error, {:client_error, response.body}}
+
+        {:ok, %{status: status} = response} when status in 500..599 ->
+          {:error, {:server_error, response.body}}
+
+        {:ok, response} ->
+          {:error, {:unexpected_response, response}}
+
+        {:error, reason} ->
+          {:error, {:network_error, reason}}
+      end
+    end
+  end
+
+  @doc """
+  Suspends a machine in the Fly.io app.
+
+  ## Parameters
+  - machine_id: The ID of the machine to suspend
+
+  ## Returns
+  - {:ok, machine_data} on success
+  - {:error, reason} on failure
+  """
+  def suspend_machine(machine_id) do
+    api_config = Application.get_env(:eureka, :fly_api)
+    api_key = api_config[:api_key]
+    api_url = api_config[:api_url]
+    app_name = api_config[:app_name]
+
+    if is_nil(api_key) or is_nil(app_name) do
+      {:error, :missing_config}
+    else
+      url = "#{api_url}/apps/#{app_name}/machines/#{machine_id}/suspend"
+
+      headers = [
+        {"Content-Type", "application/json"},
+        {"Authorization", "Bearer #{api_key}"}
+      ]
+
+      case Req.post(url, headers: headers) do
+        {:ok, %{status: 200} = response} ->
+          {:ok, response.body}
+
+        {:ok, %{status: status} = response} when status in 400..499 ->
+          {:error, {:client_error, response.body}}
+
+        {:ok, %{status: status} = response} when status in 500..599 ->
+          {:error, {:server_error, response.body}}
+
+        {:ok, response} ->
+          {:error, {:unexpected_response, response}}
+
+        {:error, reason} ->
+          {:error, {:network_error, reason}}
+      end
+    end
+  end
+
+  @doc """
+  Starts a machine in the Fly.io app.
+
+  ## Parameters
+  - machine_id: The ID of the machine to start
+
+  ## Returns
+  - {:ok, machine_data} on success
+  - {:error, reason} on failure
+  """
+  def start_machine(machine_id) do
+    api_config = Application.get_env(:eureka, :fly_api)
+    api_key = api_config[:api_key]
+    api_url = api_config[:api_url]
+    app_name = api_config[:app_name]
+
+    if is_nil(api_key) or is_nil(app_name) do
+      {:error, :missing_config}
+    else
+      url = "#{api_url}/apps/#{app_name}/machines/#{machine_id}/start"
+
+      headers = [
+        {"Content-Type", "application/json"},
+        {"Authorization", "Bearer #{api_key}"}
+      ]
+
+      case Req.post(url, headers: headers) do
         {:ok, %{status: 200} = response} ->
           {:ok, response.body}
 
@@ -227,33 +317,34 @@ defmodule Eureka.Fly do
   end
 
   @doc """
-  Lists all messages in a session, extracting only text content.
+  Lists all messages in a session, extracting only text content with role.
 
   ## Parameters
   - machine_id: The ID of the machine
   - session_id: The ID of the session
 
   ## Returns
-  - {:ok, text_messages} on success
+  - {:ok, messages} on success
   - {:error, reason} on failure
 
   ## Examples
       iex> Eureka.Fly.list_messages("machine_123", "ses_abc123")
-      {:ok, ["Hello world", "How are you?"]}
+      {:ok, [%{role: "user", text: "Hello"}, %{role: "assistant", text: "Hi there!"}]}
   """
   def list_messages(machine_id, session_id) do
     case make_request(:get, machine_id, "/session/#{session_id}/message", nil) do
       {:ok, messages} ->
         text_messages =
           messages
-          |> Enum.flat_map(fn message ->
-            message["parts"] || []
-          end)
-          |> Enum.filter(fn part ->
-            part["type"] == "text"
-          end)
-          |> Enum.map(fn part ->
-            part["text"]
+          |> Enum.map(fn message ->
+            text_part =
+              message["parts"]
+              |> Enum.find(fn part -> part["type"] == "text" end)
+
+            %{
+              role: message["info"]["role"],
+              text: if(text_part, do: text_part["text"], else: "")
+            }
           end)
 
         {:ok, text_messages}

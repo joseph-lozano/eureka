@@ -1,5 +1,4 @@
 import Config
-config :ash, policies: [show_policy_breakdowns?: true]
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

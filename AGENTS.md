@@ -266,18 +266,6 @@ Before attempting to use any of these packages or to discover if you should use 
 usage rules to understand the correct patterns, conventions, and best practices.
 <!-- usage-rules-header-end -->
 
-<!-- ash_phoenix-start -->
-## ash_phoenix usage
-_Utilities for integrating Ash and Phoenix_
-
-[ash_phoenix usage rules](deps/ash_phoenix/usage-rules.md)
-<!-- ash_phoenix-end -->
-<!-- ash-start -->
-## ash usage
-_A declarative, extensible framework for building Elixir applications._
-
-[ash usage rules](deps/ash/usage-rules.md)
-<!-- ash-end -->
 <!-- phoenix:ecto-start -->
 ## phoenix:ecto usage
 ## Ecto Guidelines
