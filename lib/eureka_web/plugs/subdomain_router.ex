@@ -14,13 +14,9 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
   def call(conn, _opts) do
     if workspace_subdomain?(conn.host) do
       Logger.debug("Workspace subdomain detected: #{conn.host}, proxying request")
-      Logger.debug("Cookies: #{inspect(conn.cookies)}")
-      Logger.debug("Request cookies header: #{inspect(get_req_header(conn, "cookie"))}")
 
       # Run auth and check if user is authenticated
       conn = EurekaWeb.Plugs.AuthPlug.call(conn, [])
-
-      Logger.debug("Current user after auth: #{inspect(conn.assigns[:current_user])}")
 
       # Check if user is authenticated before proxying
       if conn.assigns[:current_user] do
@@ -83,26 +79,8 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
       # Build upstream URL
       upstream_url = EurekaWeb.ProxyUpstream.build_from_subdomain(conn)
 
-      Logger.debug("Proxying to: #{upstream_url}")
-
-      # Use ReverseProxyPlug with Tesla adapter
-      # Try buffer mode first to test basic connectivity
-      opts =
-        ReverseProxyPlug.init(
-          upstream: upstream_url,
-          client: ReverseProxyPlug.HTTPClient.Adapters.Tesla,
-          client_options: [
-            tesla_client: EurekaWeb.TeslaClient.client()
-          ],
-          response_mode: :buffer,
-          error_callback: fn error, conn ->
-            Logger.error("ReverseProxyPlug network error: #{inspect(error)}")
-            EurekaWeb.ProxyUpstream.handle_error(error, conn)
-          end
-        )
-
-      conn = ReverseProxyPlug.call(conn, opts)
-      Logger.debug("Proxy completed")
+      # Use our custom streaming proxy
+      conn = EurekaWeb.Plugs.StreamingProxy.call(conn, upstream_url)
 
       # Halt to prevent further processing by Phoenix router
       halt(conn)

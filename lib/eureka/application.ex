@@ -11,21 +11,6 @@ defmodule Eureka.Application do
       EurekaWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:eureka, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eureka.PubSub},
-      # Finch HTTP client for Tesla (used by reverse proxy)
-      # Configured with IPv6 support for Fly.io internal networking (.internal domains)
-      {Finch,
-       name: Eureka.Finch,
-       pools: %{
-         :default => [
-           size: 50,
-           count: 1,
-           conn_opts: [
-             transport_opts: [
-               inet6: true
-             ]
-           ]
-         ]
-       }},
       # Start a worker by calling: Eureka.Worker.start_link(arg)
       # {Eureka.Worker, arg},
       # Start to serve requests, typically the last entry
