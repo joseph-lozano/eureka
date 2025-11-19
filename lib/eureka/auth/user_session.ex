@@ -3,7 +3,6 @@ defmodule Eureka.Auth.UserSession do
   Manages user session tokens and GitHub OAuth integration.
   """
 
-  alias EurekaWeb.Endpoint
   require Logger
 
   defp session_secret, do: Application.get_env(:eureka, :jwt)[:session_secret]
@@ -116,13 +115,16 @@ defmodule Eureka.Auth.UserSession do
       "Setting eureka_session cookie with domain: #{inspect(cookie_domain)} for host: #{conn.host}"
     )
 
+    # In production, always use secure cookies
+    secure = conn.scheme == :https
+
     conn
     |> Plug.Conn.put_resp_cookie(
       "eureka_session",
       token,
       max_age: token_expiry(),
       http_only: true,
-      secure: Endpoint.config(:force_ssl, false),
+      secure: secure,
       same_site: "Lax",
       domain: cookie_domain
     )
@@ -133,11 +135,12 @@ defmodule Eureka.Auth.UserSession do
   """
   def clear_session_cookie(conn) do
     cookie_domain = get_cookie_domain(conn)
+    secure = conn.scheme == :https
 
     conn
     |> Plug.Conn.delete_resp_cookie("eureka_session",
       http_only: true,
-      secure: Endpoint.config(:force_ssl, false),
+      secure: secure,
       same_site: "Lax",
       domain: cookie_domain
     )
@@ -158,6 +161,10 @@ defmodule Eureka.Auth.UserSession do
       # Legacy localhost support (won't work with subdomains)
       String.ends_with?(host, ".localhost") or host == "localhost" ->
         nil
+
+      # Production: eureka.dev and subdomains
+      String.ends_with?(host, ".eureka.dev") or host == "eureka.dev" ->
+        ".eureka.dev"
 
       # Production: extract base domain from subdomain
       String.contains?(host, "--") ->

@@ -251,6 +251,46 @@ defmodule Eureka.MachineManager do
   end
 
   defp create_new_machine(state) do
+    # First, check if a machine already exists for this username/repo
+    case find_existing_machine(state) do
+      {:ok, machine_id} ->
+        Logger.info(
+          "Found existing machine #{machine_id} for #{state.username}/#{state.repo_name}, reusing it"
+        )
+
+        # Save the machine ID to local storage for future use
+        case save_machine_data(state, machine_id) do
+          :ok ->
+            {:ok, machine_id}
+
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to save machine data for #{machine_id}, but continuing: #{inspect(reason)}"
+            )
+
+            # Still return success since we have the machine
+            {:ok, machine_id}
+        end
+
+      {:error, :not_found} ->
+        # No existing machine found, create a new one
+        Logger.info(
+          "No existing machine found for #{state.username}/#{state.repo_name}, creating new one"
+        )
+
+        create_new_machine_internal(state)
+
+      {:error, reason} ->
+        Logger.warning(
+          "Failed to check for existing machines: #{inspect(reason)}, creating new machine"
+        )
+
+        # If we can't list machines, fall back to creating a new one
+        create_new_machine_internal(state)
+    end
+  end
+
+  defp create_new_machine_internal(state) do
     machine_config = %{
       "username" => state.username,
       "repo_name" => state.repo_name
@@ -267,6 +307,33 @@ defmodule Eureka.MachineManager do
 
       reason ->
         Logger.error("Failed to save machine data: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp find_existing_machine(state) do
+    case Eureka.Fly.list_machines() do
+      {:ok, machines} when is_list(machines) ->
+        # Look for a machine with matching USERNAME and REPO_NAME env vars
+        matching_machine =
+          Enum.find(machines, fn machine ->
+            env = get_in(machine, ["config", "env"]) || %{}
+            env["USERNAME"] == state.username and env["REPO_NAME"] == state.repo_name
+          end)
+
+        case matching_machine do
+          %{"id" => machine_id} when is_binary(machine_id) ->
+            {:ok, machine_id}
+
+          _ ->
+            {:error, :not_found}
+        end
+
+      {:ok, _} ->
+        Logger.warning("Unexpected response from list_machines")
+        {:error, :invalid_response}
+
+      {:error, reason} ->
         {:error, reason}
     end
   end

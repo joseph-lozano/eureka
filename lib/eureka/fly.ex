@@ -180,6 +180,47 @@ defmodule Eureka.Fly do
   end
 
   @doc """
+  Lists all machines in the Fly.io app.
+
+  ## Returns
+  - {:ok, machines} on success, where machines is a list of machine data maps
+  - {:error, reason} on failure
+  """
+  def list_machines do
+    api_config = Application.get_env(:eureka, :fly_api)
+    api_key = api_config[:api_key]
+    api_url = api_config[:api_url]
+    app_name = api_config[:app_name]
+
+    if is_nil(api_key) or is_nil(app_name) do
+      {:error, :missing_config}
+    else
+      url = "#{api_url}/apps/#{app_name}/machines"
+
+      headers = [
+        {"Authorization", "Bearer #{api_key}"}
+      ]
+
+      case Req.get(url, headers: headers) do
+        {:ok, %{status: 200} = response} ->
+          {:ok, response.body}
+
+        {:ok, %{status: status} = response} when status in 400..499 ->
+          {:error, {:client_error, response.body}}
+
+        {:ok, %{status: status} = response} when status in 500..599 ->
+          {:error, {:server_error, response.body}}
+
+        {:ok, response} ->
+          {:error, {:unexpected_response, response}}
+
+        {:error, reason} ->
+          {:error, {:network_error, reason}}
+      end
+    end
+  end
+
+  @doc """
   Gets information about a specific machine.
 
   ## Parameters

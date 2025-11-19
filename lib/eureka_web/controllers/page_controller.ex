@@ -1,6 +1,7 @@
 defmodule EurekaWeb.PageController do
   use EurekaWeb, :controller
   import Phoenix.Component, only: [to_form: 1]
+  require Logger
 
   def home(conn, _params) do
     repo_form = to_form(%{"username_or_org" => "", "repository" => ""})
@@ -11,9 +12,41 @@ defmodule EurekaWeb.PageController do
   end
 
   def navigate(conn, %{"username_or_org" => username_or_org, "repository" => repository}) do
-    # Build subdomain URL for workspace
-    subdomain_url = build_workspace_url(username_or_org, repository)
-    redirect(conn, external: subdomain_url)
+    user_login = get_user_login(conn)
+
+    # Start the machine manager
+    {:ok, pid} =
+      Eureka.MachineManager.start_link(%{
+        user_id: user_login,
+        username: username_or_org,
+        repo_name: repository
+      })
+
+    # Ensure machine is running before redirecting
+    case Eureka.MachineManager.ensure_machine(pid) do
+      {:ok, _machine_id} ->
+        # Wait 1 second after machine starts before redirecting
+        Process.sleep(1000)
+
+        # Build subdomain URL for workspace
+        subdomain_url = build_workspace_url(username_or_org, repository)
+        redirect(conn, external: subdomain_url)
+
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, "Failed to start workspace: #{inspect(reason)}")
+        |> redirect(to: ~p"/")
+    end
+  end
+
+  defp get_user_login(conn) do
+    case conn.assigns[:current_user] do
+      %{"login" => login} when is_binary(login) ->
+        login
+
+      _ ->
+        raise "User not authenticated"
+    end
   end
 
   # Build workspace subdomain URL based on environment
