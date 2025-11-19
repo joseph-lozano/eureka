@@ -13,7 +13,7 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
 
   def call(conn, _opts) do
     if workspace_subdomain?(conn.host) do
-      Logger.info("Workspace subdomain detected: #{conn.host}, proxying to machine")
+      Logger.debug("Workspace subdomain detected: #{conn.host}, proxying to machine")
 
       # Fetch session first (required for WorkspaceSessionPlug)
       conn = Plug.Conn.fetch_session(conn)

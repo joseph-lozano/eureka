@@ -74,7 +74,7 @@ defmodule EurekaWeb.ProxyUpstream do
             app_name = api_config[:app_name]
 
             upstream = "http://#{machine_id}.vm.#{app_name}.internal:8080"
-            Logger.info("Proxying #{username}/#{repository} to #{upstream}")
+            Logger.debug("Proxying #{username}/#{repository} to #{upstream}")
 
             upstream
 
