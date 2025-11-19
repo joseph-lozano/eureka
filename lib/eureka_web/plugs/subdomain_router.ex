@@ -12,10 +12,8 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    Logger.debug("SubdomainRouter.call - host: #{conn.host}, path: #{conn.request_path}")
-
     if workspace_subdomain?(conn.host) do
-      Logger.info("✅ Workspace subdomain detected: #{conn.host}, PROXYING to machine")
+      Logger.info("Workspace subdomain detected: #{conn.host}, proxying to machine")
 
       # Fetch session first (required for WorkspaceSessionPlug)
       conn = Plug.Conn.fetch_session(conn)
@@ -26,7 +24,6 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
       proxy_to_machine(conn)
     else
       # Not a workspace subdomain, continue to Phoenix router
-      Logger.debug("❌ Not a workspace subdomain, passing to Phoenix router")
       conn
     end
   end
@@ -52,7 +49,6 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
     rescue
       error ->
         Logger.error("Proxy error in proxy_to_machine: #{inspect(error)}")
-        Logger.error("Stacktrace: #{inspect(__STACKTRACE__)}")
 
         # Redirect back to main page
         redirect_to_main_page(conn)

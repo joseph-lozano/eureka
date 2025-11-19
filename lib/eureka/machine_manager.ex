@@ -27,18 +27,14 @@ defmodule Eureka.MachineManager do
   def start_link(%{session_id: session_id, username: username, repo_name: repo_name} = opts) do
     name = {:global, {session_id, username, repo_name}}
 
-    Logger.info(
-      "MachineManager.start_link - session_id: #{session_id}, #{username}/#{repo_name}, name: #{inspect(name)}"
-    )
-
     case GenServer.start_link(__MODULE__, opts, name: name) do
       {:ok, pid} ->
         Logger.info("Created NEW GenServer for #{username}/#{repo_name} (session: #{session_id})")
         {:ok, pid}
 
       {:error, {:already_started, pid}} ->
-        Logger.info(
-          "REUSING existing GenServer for #{username}/#{repo_name} (session: #{session_id})"
+        Logger.debug(
+          "Reusing existing GenServer for #{username}/#{repo_name} (session: #{session_id})"
         )
 
         {:ok, pid}
@@ -96,8 +92,8 @@ defmodule Eureka.MachineManager do
 
   @impl true
   def init(%{session_id: session_id, username: username, repo_name: repo_name} = _opts) do
-    Logger.info(
-      "MachineManager.init - NEW GenServer process starting for session: #{session_id}, #{username}/#{repo_name}"
+    Logger.debug(
+      "MachineManager.init - starting for session: #{session_id}, #{username}/#{repo_name}"
     )
 
     state = %{
@@ -177,17 +173,55 @@ defmodule Eureka.MachineManager do
   def handle_info(:stop_machine, state) do
     case state.machine_id do
       nil ->
-        {:noreply, state}
+        # No machine to stop, but we should still terminate the GenServer
+        Logger.info(
+          "Auto-terminating MachineManager for #{state.username}/#{state.repo_name} (no machine)"
+        )
+
+        {:stop, :normal, state}
 
       _machine_id ->
         {_result, new_state} = stop_machine_internal(state, "auto")
-        {:noreply, new_state}
+
+        Logger.info(
+          "Auto-terminating MachineManager for #{state.username}/#{state.repo_name} after stopping machine"
+        )
+
+        # Terminate the GenServer after stopping the machine
+        {:stop, :normal, new_state}
     end
   end
 
   def handle_info(msg, state) do
-    Logger.debug("Received unexpected message: #{inspect(msg)}")
+    Logger.warning("Received unexpected message: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  @impl true
+  def terminate(reason, state) do
+    Logger.debug(
+      "MachineManager terminating for #{state.username}/#{state.repo_name}, reason: #{inspect(reason)}"
+    )
+
+    # Always try to stop the machine on termination (if one exists)
+    case state.machine_id do
+      nil ->
+        :ok
+
+      machine_id ->
+        case Eureka.Fly.stop_machine(machine_id) do
+          {:ok, _} ->
+            Logger.info("Stopped machine #{machine_id} during GenServer termination")
+            :ok
+
+          {:error, stop_reason} ->
+            Logger.warning(
+              "Failed to stop machine #{machine_id} during termination: #{inspect(stop_reason)}"
+            )
+
+            :ok
+        end
+    end
   end
 
   # Private functions

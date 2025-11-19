@@ -29,7 +29,7 @@ defmodule EurekaWeb.WorkspaceLive do
 
       socket =
         if connected?(socket) do
-          Logger.info("WorkspaceLive mount - session_id: #{session_id}, #{username}/#{repo}")
+          Logger.debug("WorkspaceLive mount - session_id: #{session_id}, #{username}/#{repo}")
 
           # Start the machine manager (only on connected mount)
           {:ok, pid} =
@@ -121,7 +121,7 @@ defmodule EurekaWeb.WorkspaceLive do
       true ->
         case ping_machine_internal(machine_id) do
           :ok ->
-            Logger.info(
+            Logger.debug(
               "Machine #{machine_id} is ready, redirecting to #{socket.assigns.subdomain_url}"
             )
 
@@ -177,7 +177,7 @@ defmodule EurekaWeb.WorkspaceLive do
            ]
          ) do
       {:ok, %{status: status}} when status in 200..299 ->
-        Logger.info("Machine #{machine_id} responded with status #{status}")
+        Logger.debug("Machine #{machine_id} responded with status #{status}")
         :ok
 
       {:ok, %{status: status}} ->

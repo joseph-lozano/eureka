@@ -12,12 +12,16 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
     # Build the full URL with path and query string
     url = build_url(upstream_url, conn)
 
-    # Always log POST /message requests prominently
-    if conn.method == "POST" && String.ends_with?(conn.request_path, "/message") do
-      Logger.warning("🔴 POST /message request detected: #{conn.request_path}")
-    end
+    session_id =
+      conn.assigns[:workspace_session_id] || get_session(conn, "workspace_session_id") ||
+        "unknown"
 
-    Logger.info("Proxying #{conn.method} #{conn.request_path} to #{url}")
+    {username, repo} = parse_host_info(conn.host)
+
+    Logger.info(
+      "Proxying #{conn.method} #{conn.request_path} - Session: #{session_id}, Repo: #{username}/#{repo}"
+    )
+
     Logger.debug("Proxy headers: #{inspect(proxy_headers(conn))}")
 
     # Store method and path in process dictionary for logging in stream_chunks
@@ -25,11 +29,6 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
     Process.put(:proxy_path, conn.request_path)
 
     body = read_request_body(conn)
-
-    if conn.method == "POST" && String.ends_with?(conn.request_path, "/message") do
-      Logger.warning("🔴 Request body: #{inspect(body)}")
-      Logger.warning("🔴 About to make Req.request call...")
-    end
 
     # Make the request with streaming enabled
     result =
@@ -46,13 +45,9 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
         ]
       )
 
-    if conn.method == "POST" && String.ends_with?(conn.request_path, "/message") do
-      Logger.warning("🔴 Req.request returned!")
-    end
-
     case result do
       {:ok, response} ->
-        Logger.info("Received response: status=#{response.status}")
+        Logger.debug("Received response: status=#{response.status}")
         Logger.debug("Response headers: #{inspect(response.headers)}")
         Logger.debug("Response body type: #{inspect(response.body.__struct__ || :binary)}")
         stream_response(conn, response)
@@ -129,7 +124,6 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
   defp stream_response(conn, %{status: status, headers: headers, body: body}) do
     method = Process.get(:proxy_method, "UNKNOWN")
     path = Process.get(:proxy_path, "UNKNOWN")
-    should_log = method == "POST" && String.ends_with?(path, "/message")
 
     # Set response status and headers
     conn = %{conn | resp_headers: []}
@@ -156,8 +150,7 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
     case body do
       chunks when is_list(chunks) ->
         # Body is already complete
-        if should_log,
-          do: Logger.debug("[#{method} #{path}] Body is a list with #{length(chunks)} chunks")
+        Logger.debug("[#{method} #{path}] Body is a list with #{length(chunks)} chunks")
 
         Enum.reduce_while(chunks, conn, fn chunk, conn ->
           case chunk(conn, chunk) do
@@ -168,8 +161,7 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
 
       body when is_binary(body) ->
         # Simple binary body
-        if should_log,
-          do: Logger.debug("[#{method} #{path}] Body is binary: #{byte_size(body)} bytes")
+        Logger.debug("[#{method} #{path}] Body is binary: #{byte_size(body)} bytes")
 
         case chunk(conn, body) do
           {:ok, conn} -> conn
@@ -178,8 +170,7 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
 
       _ ->
         # For streaming, we need to receive messages
-        if should_log,
-          do: Logger.debug("[#{method} #{path}] Body type requires message streaming")
+        Logger.debug("[#{method} #{path}] Body type requires message streaming")
 
         stream_chunks(conn)
     end
@@ -189,62 +180,47 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
     method = Process.get(:proxy_method, "UNKNOWN")
     path = Process.get(:proxy_path, "UNKNOWN")
 
-    # Only log for POST requests ending in /message
-    should_log = method == "POST" && String.ends_with?(path, "/message")
-
     receive do
       # Finch/Req format: {pool_ref, :data, data}
       {_pool_ref, {:data, data}} ->
-        if should_log do
-          Logger.debug(
-            "[#{method} #{path}] Received chunk: #{byte_size(data)} bytes - #{inspect(data, limit: 200)}"
-          )
-        end
+        Logger.debug(
+          "[#{method} #{path}] Received chunk: #{byte_size(data)} bytes - #{inspect(data, limit: 200)}"
+        )
 
         case chunk(conn, data) do
           {:ok, conn} ->
             stream_chunks(conn)
 
           {:error, :closed} ->
-            if should_log do
-              Logger.debug("[#{method} #{path}] Client closed connection")
-            end
+            Logger.debug("[#{method} #{path}] Client closed connection")
 
             conn
         end
 
       # Finch/Req format: {pool_ref, :done}
       {_pool_ref, :done} ->
-        if should_log do
-          Logger.info("[#{method} #{path}] Stream completed")
-        end
+        Logger.debug("[#{method} #{path}] Stream completed")
 
         conn
 
       # Alternative format
       {:data, data} ->
-        if should_log do
-          Logger.debug(
-            "[#{method} #{path}] Received chunk (alt format): #{byte_size(data)} bytes - #{inspect(data, limit: 200)}"
-          )
-        end
+        Logger.debug(
+          "[#{method} #{path}] Received chunk (alt format): #{byte_size(data)} bytes - #{inspect(data, limit: 200)}"
+        )
 
         case chunk(conn, data) do
           {:ok, conn} ->
             stream_chunks(conn)
 
           {:error, :closed} ->
-            if should_log do
-              Logger.debug("[#{method} #{path}] Client closed connection")
-            end
+            Logger.debug("[#{method} #{path}] Client closed connection")
 
             conn
         end
 
       {:done, _metadata} ->
-        if should_log do
-          Logger.info("[#{method} #{path}] Stream completed (alt format)")
-        end
+        Logger.debug("[#{method} #{path}] Stream completed (alt format)")
 
         conn
 
@@ -256,18 +232,27 @@ defmodule EurekaWeb.Plugs.StreamingProxy do
         stream_chunks(conn)
 
       other ->
-        if should_log do
-          Logger.debug("[#{method} #{path}] Ignoring stream message: #{inspect(other)}")
-        end
+        Logger.debug("[#{method} #{path}] Ignoring stream message: #{inspect(other)}")
 
         stream_chunks(conn)
     after
       60_000 ->
-        if should_log do
-          Logger.warning("[#{method} #{path}] Stream timeout after 60s of inactivity")
-        end
+        Logger.warning("[#{method} #{path}] Stream timeout after 60s of inactivity")
 
         conn
+    end
+  end
+
+  defp parse_host_info(host) do
+    case String.split(host, ".") do
+      [subdomain | _] ->
+        case String.split(subdomain, "--") do
+          [username, repo] -> {username, repo}
+          _ -> {"unknown", "unknown"}
+        end
+
+      _ ->
+        {"unknown", "unknown"}
     end
   end
 end
