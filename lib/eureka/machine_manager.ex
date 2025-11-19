@@ -68,18 +68,6 @@ defmodule Eureka.MachineManager do
   end
 
   @doc """
-  Tracks activity on the machine and resets the auto-suspend timer.
-
-  This should be called whenever there is activity (e.g., HTTP requests being proxied).
-
-  ## Returns
-  - :ok
-  """
-  def track_activity(pid) do
-    GenServer.cast(pid, :track_activity)
-  end
-
-  @doc """
   Lists all sessions from the machine with automatic retry and machine restart.
 
   ## Returns
@@ -178,12 +166,6 @@ defmodule Eureka.MachineManager do
     result = machine_request_with_retry(state.machine_id, action, args)
     new_state = reset_suspend_timer(state)
     {:reply, result, new_state}
-  end
-
-  @impl true
-  def handle_cast(:track_activity, state) do
-    new_state = reset_suspend_timer(state)
-    {:noreply, new_state}
   end
 
   @impl true
