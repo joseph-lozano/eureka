@@ -2,23 +2,29 @@
   <div class="min-h-screen flex items-center justify-center">
     <div class="text-center">
       <%= if @current_user do %>
-        <div class="w-full max-w-md">
-          <.form for={@repo_form} action="/navigate" method="post" class="flex gap-2">
+        <div class="w-full max-w-xl">
+          <.form for={@repo_form} action="/navigate" method="post" class="flex flex-col gap-4">
+          <div  class="flex gap-2 items-center">
             <.input
               field={@repo_form[:username_or_org]}
-              placeholder="Username"
+              label="GitHub Username or Organization"
+              placeholder="sst"
               required
               class="flex-1 input input-bordered"
             />
             <.input
               field={@repo_form[:repository]}
-              placeholder="Repository"
+              label="Repository Name"
+              placeholder="opencode"
               required
               class="flex-1 input input-bordered"
             />
-            <button type="submit" class="btn btn-primary">
+            </div>
+            <div class="w-full">
+            <button type="submit" class="btn btn-primary w-full">
               Go
             </button>
+            </div>
           </.form>
           <.form for={%{}} action="/logout" method="post" class="mt-4">
             <button type="submit" class="btn btn-outline w-full">
