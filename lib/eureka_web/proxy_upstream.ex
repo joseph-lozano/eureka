@@ -23,7 +23,6 @@ defmodule EurekaWeb.ProxyUpstream do
 
     Logger.debug("Building upstream for #{username}/#{repository}")
 
-    # Get or start the MachineManager
     {:ok, pid} =
       Eureka.MachineManager.start_link(%{
         user_id: user_login,
@@ -31,13 +30,11 @@ defmodule EurekaWeb.ProxyUpstream do
         repo_name: repository
       })
 
-    # Ensure machine is running and get its ID
     case Eureka.MachineManager.ensure_machine(pid) do
       {:ok, machine_id} ->
         api_config = Application.get_env(:eureka, :fly_api)
         app_name = api_config[:app_name]
 
-        # Return base upstream URL - ReverseProxyPlug will append the path
         upstream = "http://#{machine_id}.vm.#{app_name}.internal:8080"
         Logger.info("Proxying #{username}/#{repository} to #{upstream}")
 
@@ -68,7 +65,6 @@ defmodule EurekaWeb.ProxyUpstream do
       {username, repository} ->
         Logger.debug("Building upstream for subdomain: #{username}/#{repository}")
 
-        # Get or start the MachineManager
         {:ok, pid} =
           Eureka.MachineManager.start_link(%{
             user_id: user_login,
@@ -76,13 +72,11 @@ defmodule EurekaWeb.ProxyUpstream do
             repo_name: repository
           })
 
-        # Ensure machine is running and get its ID
         case Eureka.MachineManager.ensure_machine(pid) do
           {:ok, machine_id} ->
             api_config = Application.get_env(:eureka, :fly_api)
             app_name = api_config[:app_name]
 
-            # Return base upstream URL - ReverseProxyPlug will append the path
             upstream = "http://#{machine_id}.vm.#{app_name}.internal:8080"
             Logger.info("Proxying #{username}/#{repository} to #{upstream}")
 

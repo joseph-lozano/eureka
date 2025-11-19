@@ -68,6 +68,18 @@ defmodule Eureka.MachineManager do
   end
 
   @doc """
+  Tracks activity on the machine and resets the auto-suspend timer.
+
+  This should be called whenever there is activity (e.g., HTTP requests being proxied).
+
+  ## Returns
+  - :ok
+  """
+  def track_activity(pid) do
+    GenServer.cast(pid, :track_activity)
+  end
+
+  @doc """
   Lists all sessions from the machine with automatic retry and machine restart.
 
   ## Returns
@@ -125,6 +137,7 @@ defmodule Eureka.MachineManager do
     case create_new_machine(state) do
       {:ok, machine_id} ->
         new_state = %{state | machine_id: machine_id}
+        new_state = start_suspend_timer(new_state)
         {:reply, {:ok, machine_id}, new_state}
 
       {:error, reason} ->
@@ -133,7 +146,8 @@ defmodule Eureka.MachineManager do
   end
 
   def handle_call(:ensure_machine, _from, state) do
-    {:reply, {:ok, state.machine_id}, state}
+    new_state = reset_suspend_timer(state)
+    {:reply, {:ok, state.machine_id}, new_state}
   end
 
   @impl true
@@ -164,6 +178,12 @@ defmodule Eureka.MachineManager do
     result = machine_request_with_retry(state.machine_id, action, args)
     new_state = reset_suspend_timer(state)
     {:reply, result, new_state}
+  end
+
+  @impl true
+  def handle_cast(:track_activity, state) do
+    new_state = reset_suspend_timer(state)
+    {:noreply, new_state}
   end
 
   @impl true
@@ -223,6 +243,8 @@ defmodule Eureka.MachineManager do
           "Started existing machine #{machine_id} for #{state.username}/#{state.repo_name}"
         )
 
+        new_state = start_suspend_timer(new_state)
+
         {:noreply, new_state}
 
       {:error, reason} ->
@@ -239,6 +261,9 @@ defmodule Eureka.MachineManager do
       {:ok, machine_id} ->
         new_state = %{state | machine_id: machine_id}
         Logger.info("#{log_message} #{machine_id} for #{state.username}/#{state.repo_name}")
+
+        new_state = start_suspend_timer(new_state)
+
         {:noreply, new_state}
 
       {:error, reason} ->
