@@ -12,10 +12,10 @@ fi
 
 # Clone the repository from GitHub
 echo "Cloning https://github.com/${USERNAME}/${REPO_NAME}.git..."
-git clone "https://github.com/${USERNAME}/${REPO_NAME}.git" /repo
+git clone "https://github.com/${USERNAME}/${REPO_NAME}.git" --depth 1 /${REPO_NAME}
 
 # Change into the cloned directory
-cd /repo
+cd /${REPO_NAME} 
 
 # Run opencode serve
 exec /root/.opencode/bin/opencode web --hostname :: --port 8080

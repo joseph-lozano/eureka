@@ -8,7 +8,7 @@ defmodule EurekaWeb.Router do
     plug :put_root_layout, html: {EurekaWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug EurekaWeb.Plugs.AuthPlug
+    plug EurekaWeb.Plugs.SessionPlug
   end
 
   pipeline :api do
@@ -20,11 +20,6 @@ defmodule EurekaWeb.Router do
 
     get "/", PageController, :home
     post "/navigate", PageController, :navigate
-
-    # OAuth routes
-    get "/auth/github", AuthController, :new
-    get "/auth/github/callback", AuthController, :callback
-    post "/logout", AuthController, :delete
   end
 
   # Note: Workspace subdomain proxying is handled by SubdomainRouter plug in endpoint.ex

@@ -12,12 +12,12 @@ defmodule EurekaWeb.PageController do
   end
 
   def navigate(conn, %{"username_or_org" => username_or_org, "repository" => repository}) do
-    user_login = get_user_login(conn)
+    session_id = get_session(conn, :session_id)
 
     # Start the machine manager
     {:ok, pid} =
       Eureka.MachineManager.start_link(%{
-        user_id: user_login,
+        session_id: session_id,
         username: username_or_org,
         repo_name: repository
       })
@@ -36,16 +36,6 @@ defmodule EurekaWeb.PageController do
         conn
         |> put_flash(:error, "Failed to start workspace: #{inspect(reason)}")
         |> redirect(to: ~p"/")
-    end
-  end
-
-  defp get_user_login(conn) do
-    case conn.assigns[:current_user] do
-      %{"login" => login} when is_binary(login) ->
-        login
-
-      _ ->
-        raise "User not authenticated"
     end
   end
 

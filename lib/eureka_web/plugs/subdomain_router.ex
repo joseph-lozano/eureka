@@ -15,16 +15,13 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
     if workspace_subdomain?(conn.host) do
       Logger.debug("Workspace subdomain detected: #{conn.host}, proxying request")
 
-      # Run auth and check if user is authenticated
-      conn = EurekaWeb.Plugs.AuthPlug.call(conn, [])
+      # Fetch session to ensure session_id is available
+      conn = Plug.Conn.fetch_session(conn)
 
-      # Check if user is authenticated before proxying
-      if conn.assigns[:current_user] do
-        proxy_to_machine(conn)
-      else
-        # Redirect to login
-        redirect_to_login(conn)
-      end
+      # Ensure session_id exists (generate if needed)
+      conn = EurekaWeb.Plugs.SessionPlug.call(conn, [])
+
+      proxy_to_machine(conn)
     else
       # Not a workspace subdomain, continue to Phoenix router
       conn
@@ -38,41 +35,6 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
   end
 
   defp workspace_subdomain?(_), do: false
-
-  defp redirect_to_login(conn) do
-    Logger.info("Redirecting unauthenticated user to login from #{conn.host}")
-
-    # Build the login URL on the main domain
-    login_url = build_login_url(conn)
-
-    conn
-    |> Phoenix.Controller.redirect(external: login_url)
-    |> halt()
-  end
-
-  # Builds the login URL on the main domain
-  # For subdomains like sst--opencode.localhost, redirects to localhost
-  # For subdomains like sst--opencode.eureka.dev, redirects to eureka.dev
-  defp build_login_url(conn) do
-    # Get the base domain (without the workspace subdomain)
-    base_host =
-      case String.split(conn.host, ".") do
-        [_subdomain | rest] when length(rest) >= 1 ->
-          # e.g., "sst--opencode.localhost" -> "localhost"
-          # e.g., "sst--opencode.eureka.dev" -> "eureka.dev"
-          Enum.join(rest, ".")
-
-        _ ->
-          # Fallback to current host
-          conn.host
-      end
-
-    # Build the login URL
-    scheme = if conn.scheme == :https, do: "https", else: "http"
-    port = if conn.port in [80, 443], do: "", else: ":#{conn.port}"
-
-    "#{scheme}://#{base_host}#{port}/auth/github"
-  end
 
   defp proxy_to_machine(conn) do
     try do

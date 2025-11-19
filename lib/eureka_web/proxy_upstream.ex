@@ -19,13 +19,13 @@ defmodule EurekaWeb.ProxyUpstream do
   def build_from_path(conn) do
     username = conn.path_params["username"]
     repository = conn.path_params["repository"]
-    user_login = get_user_login(conn)
+    session_id = get_session_id(conn)
 
-    Logger.debug("Building upstream for #{username}/#{repository}")
+    Logger.debug("Building upstream for #{username}/#{repository} (session: #{session_id})")
 
     {:ok, pid} =
       Eureka.MachineManager.start_link(%{
-        user_id: user_login,
+        session_id: session_id,
         username: username,
         repo_name: repository
       })
@@ -59,15 +59,17 @@ defmodule EurekaWeb.ProxyUpstream do
       raise NotAWorkspaceError, message: "Not a workspace subdomain", host: conn.host
     end
 
-    user_login = get_user_login(conn)
+    session_id = get_session_id(conn)
 
     case parse_subdomain(conn.host) do
       {username, repository} ->
-        Logger.debug("Building upstream for subdomain: #{username}/#{repository}")
+        Logger.debug(
+          "Building upstream for subdomain: #{username}/#{repository} (session: #{session_id})"
+        )
 
         {:ok, pid} =
           Eureka.MachineManager.start_link(%{
-            user_id: user_login,
+            session_id: session_id,
             username: username,
             repo_name: repository
           })
@@ -126,15 +128,14 @@ defmodule EurekaWeb.ProxyUpstream do
     |> Plug.Conn.send_resp(502, error_page_html())
   end
 
-  defp get_user_login(conn) do
-    case conn.assigns[:current_user] do
-      %{"login" => login} when is_binary(login) ->
-        login
+  defp get_session_id(conn) do
+    case Plug.Conn.get_session(conn, :session_id) do
+      nil ->
+        Logger.error("No session_id found in session - this should not happen")
+        raise "No session_id in session"
 
-      _ ->
-        # This should never happen since SubdomainRouter checks auth first
-        Logger.error("User not authenticated in proxy request - this should not happen")
-        raise "User not authenticated"
+      session_id ->
+        session_id
     end
   end
 

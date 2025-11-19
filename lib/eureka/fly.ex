@@ -31,7 +31,7 @@ defmodule Eureka.Fly do
 
         default_config = %{
           "config" => %{
-            "auto_destroy" => false,
+            "auto_destroy" => true,
             "image" => "jetpackjoe/opencode:latest",
             "guest" => %{
               "cpu_kind" => "shared",
@@ -90,16 +90,16 @@ defmodule Eureka.Fly do
   end
 
   @doc """
-  Suspends a machine in the Fly.io app.
+  Stops a machine in the Fly.io app.
 
   ## Parameters
-  - machine_id: The ID of the machine to suspend
+  - machine_id: The ID of the machine to stop
 
   ## Returns
   - {:ok, machine_data} on success
   - {:error, reason} on failure
   """
-  def suspend_machine(machine_id) do
+  def stop_machine(machine_id) do
     api_config = Application.get_env(:eureka, :fly_api)
     api_key = api_config[:api_key]
     api_url = api_config[:api_url]
@@ -108,7 +108,7 @@ defmodule Eureka.Fly do
     if is_nil(api_key) or is_nil(app_name) do
       {:error, :missing_config}
     else
-      url = "#{api_url}/apps/#{app_name}/machines/#{machine_id}/suspend"
+      url = "#{api_url}/apps/#{app_name}/machines/#{machine_id}/stop"
 
       headers = [
         {"Content-Type", "application/json"},
