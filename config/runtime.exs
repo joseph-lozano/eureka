@@ -73,15 +73,7 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
-    secret_key_base: secret_key_base,
-    # Force SSL for secure cookies
-    force_ssl: [hsts: true],
-    # Configure session cookie for cross-subdomain authentication
-    # The leading dot in domain allows cookie sharing across all subdomains
-    session_options: [
-      domain: ".#{host}",
-      secure: true
-    ]
+    secret_key_base: secret_key_base
 
   # ## SSL Support
   #
