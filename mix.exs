@@ -69,7 +69,9 @@ defmodule Eureka.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:assent, "~> 0.3.1"},
-      {:joken, "~> 2.6"}
+      {:joken, "~> 2.6"},
+      {:reverse_proxy_plug, "~> 3.0"},
+      {:finch, "~> 0.19"}
     ]
   end
 

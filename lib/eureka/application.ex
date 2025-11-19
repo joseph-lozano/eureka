@@ -11,6 +11,8 @@ defmodule Eureka.Application do
       EurekaWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:eureka, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Eureka.PubSub},
+      # Finch HTTP client for reverse proxy
+      {Finch, name: Eureka.Finch},
       # Start a worker by calling: Eureka.Worker.start_link(arg)
       # {Eureka.Worker, arg},
       # Start to serve requests, typically the last entry

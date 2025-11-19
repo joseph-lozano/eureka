@@ -79,13 +79,27 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
   end
 
   defp proxy_to_machine(conn) do
-    # Build upstream URL
-    upstream_url = EurekaWeb.ProxyUpstream.build_from_subdomain(conn)
+    try do
+      # Build upstream URL
+      upstream_url = EurekaWeb.ProxyUpstream.build_from_subdomain(conn)
 
-    # Use our custom streaming proxy
-    conn = EurekaWeb.Plugs.StreamingProxy.call(conn, upstream_url)
+      # Use ReverseProxyPlug with Finch adapter
+      conn =
+        ReverseProxyPlug.call(conn, %{
+          upstream: upstream_url,
+          client: ReverseProxyPlug.HTTPClient.Adapters.Finch,
+          client_options: [
+            finch_client: Eureka.Finch,
+            receive_timeout: :infinity
+          ],
+          response_mode: :stream
+        })
 
-    # Halt to prevent further processing by Phoenix router
-    halt(conn)
+      # Halt to prevent further processing by Phoenix router
+      halt(conn)
+    rescue
+      error ->
+        EurekaWeb.ProxyUpstream.handle_error(error, conn)
+    end
   end
 end
