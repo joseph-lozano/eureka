@@ -71,6 +71,7 @@ defmodule Eureka.MixProject do
       {:assent, "~> 0.3.1"},
       {:joken, "~> 2.6"},
       {:reverse_proxy_plug, "~> 3.0"},
+      {:tesla, "~> 1.9"},
       {:finch, "~> 0.19"}
     ]
   end

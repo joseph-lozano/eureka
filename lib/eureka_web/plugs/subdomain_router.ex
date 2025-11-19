@@ -83,22 +83,33 @@ defmodule EurekaWeb.Plugs.SubdomainRouter do
       # Build upstream URL
       upstream_url = EurekaWeb.ProxyUpstream.build_from_subdomain(conn)
 
-      # Use ReverseProxyPlug with Finch adapter
-      conn =
-        ReverseProxyPlug.call(conn, %{
+      Logger.debug("Proxying to: #{upstream_url}")
+
+      # Use ReverseProxyPlug with Tesla adapter
+      # Try buffer mode first to test basic connectivity
+      opts =
+        ReverseProxyPlug.init(
           upstream: upstream_url,
-          client: ReverseProxyPlug.HTTPClient.Adapters.Finch,
+          client: ReverseProxyPlug.HTTPClient.Adapters.Tesla,
           client_options: [
-            finch_client: Eureka.Finch,
-            receive_timeout: :infinity
+            tesla_client: EurekaWeb.TeslaClient.client()
           ],
-          response_mode: :stream
-        })
+          response_mode: :buffer,
+          error_callback: fn error, conn ->
+            Logger.error("ReverseProxyPlug network error: #{inspect(error)}")
+            EurekaWeb.ProxyUpstream.handle_error(error, conn)
+          end
+        )
+
+      conn = ReverseProxyPlug.call(conn, opts)
+      Logger.debug("Proxy completed")
 
       # Halt to prevent further processing by Phoenix router
       halt(conn)
     rescue
       error ->
+        Logger.error("Proxy error in proxy_to_machine: #{inspect(error)}")
+        Logger.error("Stacktrace: #{inspect(__STACKTRACE__)}")
         EurekaWeb.ProxyUpstream.handle_error(error, conn)
     end
   end
