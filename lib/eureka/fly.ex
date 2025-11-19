@@ -7,84 +7,80 @@ defmodule Eureka.Fly do
   Creates a new machine in the Fly.io app.
 
   ## Parameters
-  - machine_config: Configuration map for the machine
+  - username: GitHub username or organization
+  - repo_name: Repository name
+  - machine_config: Additional configuration map for the machine (optional)
 
   ## Returns
   - {:ok, machine_data} on success
   - {:error, reason} on failure
   """
-  def create_machine(machine_config \\ %{}) do
+  def create_machine(username, repo_name, machine_config \\ %{}) do
     api_config = Application.get_env(:eureka, :fly_api)
     api_key = api_config[:api_key]
     api_url = api_config[:api_url]
     app_name = api_config[:app_name]
-    username = machine_config["username"]
-    repo_name = machine_config["repo_name"]
 
     if is_nil(api_key) or is_nil(app_name) do
       {:error, :missing_config}
     else
-      if is_nil(username) or is_nil(repo_name) do
-        {:error, :missing_repo_info}
-      else
-        url = "#{api_url}/apps/#{app_name}/machines"
+      url = "#{api_url}/apps/#{app_name}/machines"
 
-        default_config = %{
-          "config" => %{
-            "auto_destroy" => true,
-            "image" => "jetpackjoe/opencode:latest",
-            "guest" => %{
-              "cpu_kind" => "shared",
-              "cpus" => 1,
-              "memory_mb" => 512
-            },
-            "restart" => %{
-              "policy" => "no"
-            },
-            "services" => [
-              %{
-                "protocol" => "tcp",
-                "internal_port" => 8080,
-                "ports" => [
-                  %{
-                    "port" => 80,
-                    "handlers" => ["http"]
-                  }
-                ]
-              }
-            ],
-            "env" => %{
-              "USERNAME" => username,
-              "REPO_NAME" => repo_name
-            }
+      default_config = %{
+        "config" => %{
+          "auto_destroy" => true,
+          "image" => "jetpackjoe/opencode:latest",
+          "guest" => %{
+            "cpu_kind" => "shared",
+            "cpus" => 1,
+            "memory_mb" => 512
           },
-          "region" => "iad",
-          "skip_launch" => false
-        }
+          "restart" => %{
+            "policy" => "no"
+          },
+          "services" => [
+            %{
+              "protocol" => "tcp",
+              "internal_port" => 8080,
+              "ports" => [
+                %{
+                  "port" => 80,
+                  "handlers" => ["http"]
+                }
+              ]
+            }
+          ],
+          "env" => %{
+            "USERNAME" => username,
+            "REPO_NAME" => repo_name
+          }
+        },
+        "region" => "iad",
+        "skip_launch" => false
+      }
 
-        final_config = deep_merge(default_config, machine_config)
+      final_config = deep_merge(default_config, machine_config)
 
-        headers = [
-          {"Content-Type", "application/json"},
-          {"Authorization", "Bearer #{api_key}"}
-        ]
+      headers = [
+        {"Content-Type", "application/json"},
+        {"Authorization", "Bearer #{api_key}"}
+      ]
 
-        case Req.post(url, json: final_config, headers: headers) do
-          {:ok, %{status: 200} = response} ->
-            {:ok, response.body}
+      case Req.post(url, json: final_config, headers: headers) do
+        {:ok, %{status: 200} = response} ->
+          {:ok, response.body}
 
-          {:ok, %{status: status} = response} when status in 400..499 ->
-            {:error, {:client_error, response.body}}
+        {:ok, %{status: status} = response} when status in 400..499 ->
+          {:error, {:client_error, response.body}}
 
-          {:ok, %{status: status} = response} when status in 500..599 ->
-            {:error, {:server_error, response.body}}
+        {:ok, %{status: status} = response} when status in 500..599 ->
+          {:error, {:server_error, response.body}}
 
-          {:ok, response} ->
-            {:error, {:unexpected_response, response}}
+        {:ok, response} ->
+          {:error, {:unexpected_response, response}}
 
-          {:error, reason} ->
-            {:error, {:network_error, reason}}
-        end
+        {:error, reason} ->
+          {:error, {:network_error, reason}}
       end
     end
   end

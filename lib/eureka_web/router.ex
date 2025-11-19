@@ -8,7 +8,7 @@ defmodule EurekaWeb.Router do
     plug :put_root_layout, html: {EurekaWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    plug EurekaWeb.Plugs.SessionPlug
+    plug EurekaWeb.Plugs.WorkspaceSessionPlug
   end
 
   pipeline :api do
@@ -20,6 +20,7 @@ defmodule EurekaWeb.Router do
 
     get "/", PageController, :home
     post "/navigate", PageController, :navigate
+    live "/:username/:repo", WorkspaceLive
   end
 
   # Note: Workspace subdomain proxying is handled by SubdomainRouter plug in endpoint.ex

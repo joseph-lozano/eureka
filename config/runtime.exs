@@ -20,6 +20,17 @@ if System.get_env("PHX_SERVER") do
   config :eureka, EurekaWeb.Endpoint, server: true
 end
 
+# PHX_HOST is required for cookie domain configuration
+# In dev: eureka.local, In prod: your domain (e.g., eureka.dev)
+phx_host =
+  System.get_env("PHX_HOST") ||
+    raise """
+    environment variable PHX_HOST is missing.
+    Set PHX_HOST=eureka.local for development or your domain for production.
+    """
+
+config :eureka, :host, phx_host
+
 config :eureka, :fly_api,
   api_key: System.get_env("FLY_TOKEN"),
   api_url: "https://api.machines.dev/v1",
@@ -38,13 +49,12 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
   port = String.to_integer(System.get_env("PORT") || "4000")
 
   config :eureka, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :eureka, EurekaWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: phx_host, port: 443, scheme: "https"],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.

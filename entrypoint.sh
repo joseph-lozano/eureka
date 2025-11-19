@@ -17,5 +17,9 @@ git clone "https://github.com/${USERNAME}/${REPO_NAME}.git" --depth 1 /${REPO_NA
 # Change into the cloned directory
 cd /${REPO_NAME} 
 
+# Disable IPv6 at runtime (in case sysctl didn't work)
+sysctl -w net.ipv6.conf.all.disable_ipv6=1 2>/dev/null || true
+sysctl -w net.ipv6.conf.default.disable_ipv6=1 2>/dev/null || true
+
 # Run opencode serve
-exec /root/.opencode/bin/opencode web --hostname :: --port 8080
+exec /root/.opencode/bin/opencode web --hostname :: --port 8080 --print-logs

@@ -27,10 +27,24 @@ defmodule Eureka.MachineManager do
   def start_link(%{session_id: session_id, username: username, repo_name: repo_name} = opts) do
     name = {:global, {session_id, username, repo_name}}
 
+    Logger.info(
+      "MachineManager.start_link - session_id: #{session_id}, #{username}/#{repo_name}, name: #{inspect(name)}"
+    )
+
     case GenServer.start_link(__MODULE__, opts, name: name) do
-      {:ok, pid} -> {:ok, pid}
-      {:error, {:already_started, pid}} -> {:ok, pid}
-      error -> error
+      {:ok, pid} ->
+        Logger.info("Created NEW GenServer for #{username}/#{repo_name} (session: #{session_id})")
+        {:ok, pid}
+
+      {:error, {:already_started, pid}} ->
+        Logger.info(
+          "REUSING existing GenServer for #{username}/#{repo_name} (session: #{session_id})"
+        )
+
+        {:ok, pid}
+
+      error ->
+        error
     end
   end
 
@@ -82,6 +96,10 @@ defmodule Eureka.MachineManager do
 
   @impl true
   def init(%{session_id: session_id, username: username, repo_name: repo_name} = _opts) do
+    Logger.info(
+      "MachineManager.init - NEW GenServer process starting for session: #{session_id}, #{username}/#{repo_name}"
+    )
+
     state = %{
       session_id: session_id,
       username: username,
@@ -195,20 +213,45 @@ defmodule Eureka.MachineManager do
 
   defp create_new_machine(state) do
     machine_config = %{
-      "username" => state.username,
-      "repo_name" => state.repo_name
+      "name" => "eureka-#{state.session_id}-#{state.username}-#{state.repo_name}"
     }
 
-    case Eureka.Fly.create_machine(machine_config) do
+    case Eureka.Fly.create_machine(state.username, state.repo_name, machine_config) do
       {:ok, machine_data} ->
         machine_id = machine_data["id"]
         {:ok, machine_id}
+
+      {:error, {:client_error, %{"error" => error_msg}}} = reason ->
+        # Check if machine already exists and extract its ID
+        case extract_machine_id_from_error(error_msg) do
+          {:ok, machine_id} ->
+            Logger.info(
+              "Machine already exists with ID #{machine_id}, reusing it for #{state.username}/#{state.repo_name}"
+            )
+
+            {:ok, machine_id}
+
+          :error ->
+            Logger.error("Failed to create machine: #{inspect(reason)}")
+            {:error, reason}
+        end
 
       {:error, reason} ->
         Logger.error("Failed to create machine: #{inspect(reason)}")
         {:error, reason}
     end
   end
+
+  # Extract machine ID from "already_exists" error message
+  # Example: "already_exists: unique machine name violation, machine ID 84e906f27d6958 already exists..."
+  defp extract_machine_id_from_error(error_msg) when is_binary(error_msg) do
+    case Regex.run(~r/machine ID ([a-f0-9]+) already exists/i, error_msg) do
+      [_, machine_id] -> {:ok, machine_id}
+      _ -> :error
+    end
+  end
+
+  defp extract_machine_id_from_error(_), do: :error
 
   defp machine_request_with_retry(machine_id, action, args) do
     case apply_with_timeout(Eureka.Fly, action, [machine_id | args], 5000) do

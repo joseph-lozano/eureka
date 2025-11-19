@@ -2,7 +2,19 @@ FROM oven/bun:1.3.2-slim
 
 RUN apt-get update && apt-get install -y curl unzip git
 
+# Disable IPv6 to avoid Bun DNS hanging issues
+RUN echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.conf && \
+    echo 'net.ipv6.conf.default.disable_ipv6 = 1' >> /etc/sysctl.conf && \
+    echo 'net.ipv6.conf.lo.disable_ipv6 = 1' >> /etc/sysctl.conf
+
+# Set Bun to prefer IPv4
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
+
 RUN curl -fsSL https://opencode.ai/install | bash
+
+# Create OpenCode config with default model
+RUN mkdir -p /root/.config/opencode && \
+    echo '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "opencode/big-pickle"\n}' > /root/.config/opencode/opencode.json
 
 # Copy entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
